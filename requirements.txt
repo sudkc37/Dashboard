@@ -3,4 +3,3 @@ plotly
 xlrd
 watchdog
 pyodbc
-unixodbc
