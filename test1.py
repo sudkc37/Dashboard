@@ -163,6 +163,28 @@ def get_sales_per_day():
     conn.close()
     return df
 
+st.cache_data(ttl=60)  # Cache data for 60 seconds
+def get_rating_data():
+    conn = pyodbc.connect(
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=localhost,1433;"
+        "DATABASE=Resturant;"
+        "UID=SA;"
+        "PWD=YourStrongPassw0rd"
+    )
+    query = """
+        select DATEPART(year, created_at) as year,
+        DATEPART(week, created_at)  as week,
+        avg(case when rating > 0 then rating end) as avg_rating
+        from [Resturant].[dbo].[review]
+        where rating > 0
+        group by DATEPART(year, created_at), DATEPART(week, created_at)
+        order by year, week;
+    """
+    df = pd.read_sql(query, conn)
+    conn.close()
+    return df
+
 # Fetch data
 df_city = get_city_data()
 df_food = get_food_data()
@@ -171,9 +193,10 @@ df_average = get_average()
 df_totalRevenue = get_totalRevenue()
 df_totalcustomer = get_totalcustomer()
 df_daily_sales = get_sales_per_day()
+df_rating = get_rating_data()
 
 print(df_totalRevenue)
-col1, col2, col3, col4 = st.columns(4)
+col1, col2, col3, col4, col5, col6 = st.columns(6)
 with col1:
     st.metric("Total Revenue", f"${df_totalRevenue}")  
 
@@ -184,13 +207,20 @@ with col3:
     st.metric("Total Customers", f"{df_totalcustomer}")
 
 with col4:
-    st.metric("Average Per Ticket", f"{df_average:,.02f}")
+    st.metric("Average Per Ticket", f"${df_average:,.02f}")
+
+with col5:
+    st.metric("Gross Margin", f"{((df_totalRevenue - (0.733*df_totalRevenue))/df_totalRevenue)*100:,.02f}%")
+
+with col6:
+    st.metric("Net Profit", f"{((df_totalRevenue - (0.862*df_totalRevenue))/df_totalRevenue)*100:,.02f}%")
 
     
 # Split into two columns
 col1, col2 = st.columns(2)
 with col1:
     fig_city = px.bar(df_city, x="delivery_city", y="city_count", title="Number of Customers by City", template="seaborn")
+    fig_city.update_layout(title_x=0.4)
     st.plotly_chart(fig_city, use_container_width=True)
     
 # Plot Food Category Sales
@@ -198,13 +228,10 @@ with col2:
     #fig_food = px.bar(df_food, x="item_name", y="total_sold", title="Total Sold Items by Food Category", template="seaborn")
     #st.plotly_chart(fig_food, use_container_width=True)
     fig_food = px.pie(df_food, values="total_sold", names="item_name", title="Total Sold Items by Food Category", template="seaborn")
+    fig_food.update_layout(title_x=0.4, width=300)
     st.plotly_chart(fig_food, use_container_width=True)
 
-with col2:
-    fig_city = px.choropleth(df_city, locations="delivery_city", locationmode="country names", 
-                                color="city_count", hover_name="delivery_city", scope='usa', 
-                                title="Number of Customers by City", template="seaborn")
-    st.plotly_chart(fig_city, use_container_width=True)
+col1, col2, col3 = st.columns(3)
 
 with col1:
     fig_city = px.bar(df_delivery, 
@@ -216,11 +243,23 @@ with col1:
                               "total_revenue": "Total Revenue", 
                               "delivery_count": "Delivery Count"},
                       barmode='group') 
+    fig_city.update_layout(title_x=0.3)
     
     st.plotly_chart(fig_city, use_container_width=True)
 
-fig_daily_sales = px.line(df_daily_sales, x="order_date", y="sales", title="Sales per Day", template="seaborn")
-st.plotly_chart(fig_daily_sales, use_container_width=True)
+
+df_rating["color"] = df_rating["avg_rating"].apply(lambda x: "poor" if x < 5 else "average" if x < 7 else "green")
+with col2:
+    fig_rating = px.bar(df_rating, x="week", y="avg_rating", title="Average Rating Trends", template="seaborn",
+                        color="color", color_discrete_map={"red": "red", "yellow": "yellow", "green": "green"},
+                        )
+    fig_rating.update_layout(title_x=0.4)
+    st.plotly_chart(fig_rating, use_container_width=True)
+
+with col3:
+    fig_daily_sales = px.line(df_daily_sales, x="order_date", y="sales", title="Sales Trends", template="seaborn")
+    fig_daily_sales.update_layout(title_x=0.4)
+    st.plotly_chart(fig_daily_sales, use_container_width=True)
 
 
 
