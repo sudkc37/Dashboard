@@ -1,0 +1,4 @@
+.env
+.streamlit_env
+.dash
+.__pycache__
